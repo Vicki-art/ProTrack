@@ -1,13 +1,19 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-import os
+from sqlalchemy.orm import declarative_base
+from app.config import settings
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/projects_db"
+
+DATABASE_URL = (
+    f"postgresql://{settings.database_username}:"
+    f"{settings.database_password}@{settings.database_hostname}:"
+    f"{settings.database_port}/{settings.database_name}"
 )
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+Base = declarative_base()
 
 def get_db():
     db = SessionLocal()

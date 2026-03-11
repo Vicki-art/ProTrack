@@ -11,6 +11,9 @@ app.include_router(documents.router, prefix="/documents", tags=["documents"])
 def root():
     return {"message": "Project Management Service is running"}
 
+def register():
+    return {"message": "Project Management Service is running"}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
