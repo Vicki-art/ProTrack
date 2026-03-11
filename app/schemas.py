@@ -2,6 +2,7 @@ from pydantic import BaseModel, model_validator, field_validator, Field
 from datetime import datetime
 import re
 
+
 class UserCreate(BaseModel):
     username: str = Field(alias="login")
     password: str
@@ -25,6 +26,7 @@ class UserCreate(BaseModel):
             raise ValueError("Passwords do not match")
         return self
 
+
 class UserOut(BaseModel):
     id: int
     username: str
@@ -32,3 +34,17 @@ class UserOut(BaseModel):
 
     class Config:
         orm_mode = True
+
+
+class LoginCredentials(BaseModel):
+    login: str
+    password: str
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+
+class TokenData(BaseModel):
+    id: str | None = None
