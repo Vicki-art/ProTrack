@@ -1,31 +1,28 @@
-from fastapi import HTTPException, status
-from sqlalchemy.exc import IntegrityError
 from app import utils, models, oauth2
+from sqlalchemy.exc import SQLAlchemyError
+from app import exceptions
 
 
 def create_user(user, db):
     hashed_password = utils.hash(user.password)
-    user.password = hashed_password
 
     new_user = models.User(username=user.username,
-                           password=user.password, profile=models.Profile())
-    db.add(new_user)
+                           password=hashed_password, profile=models.Profile())
+
+    existing_user = db.query(models.User)\
+        .filter(models.User.username == user.username)\
+        .first()
+    if existing_user:
+        raise exceptions.UsernameAlreadyExistsError()
 
     try:
+        db.add(new_user)
         db.commit()
-    except IntegrityError as e:
+        db.refresh(new_user)
+
+    except SQLAlchemyError as e:
         db.rollback()
-        constraint = getattr(e.orig.diag, "constraint_name", "")
-        if constraint == "unique_username":
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Username already exists")
-
-        raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Database error")
-
-    db.refresh(new_user)
+        raise exceptions.DatabaseError()
 
     return new_user
 
@@ -35,12 +32,10 @@ def login(user_credentials, db):
         models.User.username == user_credentials.login).first()
 
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail=f"Invalid Credentials")
+        raise exceptions.InvalidCredentialsError()
 
     if not utils.verify(user_credentials.password, user.password):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail=f"Invalid Credentials")
+        raise exceptions.InvalidCredentialsError()
 
     access_token = oauth2.create_access_token(data={"user_id": str(user.id)})
     return access_token

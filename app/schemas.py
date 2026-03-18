@@ -1,17 +1,15 @@
-from pydantic import BaseModel, model_validator, field_validator, Field
+from pydantic import BaseModel, model_validator, field_validator, Field, EmailStr
 from datetime import datetime
 import re
 
 
 class UserCreate(BaseModel):
-    username: str = Field(alias="login")
-    password: str
-    repeat_password: str
+    username: str = Field(alias="login", min_length=2, max_length=50)
+    password: str = Field(min_length=8, max_length=128)
+    repeat_password: str = Field(exclude=True)
 
     @field_validator("password")
     def validate_password(cls, value):
-        if len(value) < 8:
-            raise ValueError("Password must be at least 8 characters long")
         if not re.search(r"[A-Z]", value):
             raise ValueError("Password must contain an uppercase letter")
         if not re.search(r"[a-z]", value):
@@ -36,6 +34,18 @@ class UserOut(BaseModel):
         orm_mode = True
 
 
+class ProfileIn(BaseModel):
+    first_name: str | None = Field(default=None, min_length=1, max_length=100)
+    last_name: str | None = Field(default=None, min_length=1, max_length=100)
+    email: EmailStr | None = Field(default=None, max_length=254)
+
+
+class ProfileOut(BaseModel):
+    first_name: str | None
+    last_name: str | None
+    email: EmailStr | None
+
+
 class LoginCredentials(BaseModel):
     login: str
     password: str
@@ -48,3 +58,21 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     id: str | None = None
+
+class ProjectTokenData(BaseModel):
+    owner_id: str | None = None
+    project_id: str | None = None
+
+class ProjectIn(BaseModel):
+    name: str = Field(min_length=2, max_length=255)
+    description: str = Field(max_length=5000)
+
+
+class ProjectOut(BaseModel):
+    id: int
+    name: str
+    description: str
+    owner: ProfileOut
+
+class ParticipantActionResquest(BaseModel):
+    user_id: int

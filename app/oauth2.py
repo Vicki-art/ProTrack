@@ -1,10 +1,11 @@
 import jwt
 from datetime import datetime, timedelta
 from . import schemas, db, models
-from fastapi import Depends, status, HTTPException
+from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from .config import settings
+from app import exceptions
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='login')
 
@@ -24,37 +25,31 @@ def create_access_token(data: dict):
     return encoded_jwt
 
 
-def verify_access_token(token: str, credentials_exception):
+def verify_access_token(token: str) -> schemas.TokenData:
 
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        id: str = payload.get("user_id")
+        id: str = payload.get("user_id", None)
         if id is None:
-            print("two")
-            raise credentials_exception
+            raise exceptions.InvalidTokenError()
         token_data = schemas.TokenData(id=id)
     except jwt.ExpiredSignatureError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token expired. You need to login again",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise exceptions.TokenExpiredError()
+
     except jwt.InvalidTokenError:
-        raise credentials_exception
+        raise exceptions.InvalidTokenError()
 
     return token_data
 
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(db.get_db)):
-    credentials_exception = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                                          detail=f"Could not validate credentials",
-                                          headers={"WWW-Authenticate": "Bearer"})
 
-    token = verify_access_token(token, credentials_exception)
+    token_data = verify_access_token(token)
 
-    user = db.query(models.User).filter(models.User.id == token.id).first()
+    user = db.query(models.User).filter(models.User.id == token_data.id).first()
+
     if not user:
-        raise credentials_exception
+        raise exceptions.InvalidCredentialsError()
 
     return user
 

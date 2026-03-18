@@ -1,9 +1,13 @@
 from fastapi import FastAPI
-from app.routers import auth, projects, documents
+from app.routers import auth, projects, documents, users
+from app.exception_handlers import register_exception_handlers
 
 app = FastAPI(title="Project Management Service")
 
+register_exception_handlers(app)
+
 app.include_router(auth.router, prefix="", tags=["auth"])
+app.include_router(users.router, prefix="/users", tags=["users"])
 app.include_router(projects.router, prefix="/projects", tags=["projects"])
 app.include_router(documents.router, prefix="/documents", tags=["documents"])
 

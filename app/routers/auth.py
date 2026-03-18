@@ -18,8 +18,8 @@ def sign_up(user: schemas.UserCreate,
         "message": "User account was successfully created",
         "user_id": new_user.id,
         "username": new_user.username,
-        "name": getattr(new_user.profile, "name", "N/A"),
-        "surname": getattr(new_user.profile, "surname", "N/A"),
+        "first name": getattr(new_user.profile, "first_name", "N/A"),
+        "last name": getattr(new_user.profile, "last_name", "N/A"),
         "email": getattr(new_user.profile, "email", "N/A"),
         "profile_link": str(profile_url)
         }
@@ -31,8 +31,3 @@ def login(user_credentials: schemas.LoginCredentials,
     access_token = auth_services.login(user_credentials, db)
 
     return {"access_token": access_token, "token_type": "bearer"}
-
-
-# @router.post("/users/{user_id}/profile", status_code=status.HTTP_201_CREATED)
-# def profile(db: Session = Depends(get_db)):
-#     pass
