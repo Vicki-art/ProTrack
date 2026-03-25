@@ -31,13 +31,13 @@ def verify_access_token(token: str) -> schemas.TokenData:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         id: str = payload.get("user_id", None)
         if id is None:
-            raise exceptions.InvalidTokenError()
+            raise exceptions.InvalidCredentialsError("Invalid token. You need to login again")
         token_data = schemas.TokenData(id=id)
     except jwt.ExpiredSignatureError:
-        raise exceptions.TokenExpiredError()
+        raise exceptions.InvalidCredentialsError("Token expired. You need to login again")
 
     except jwt.InvalidTokenError:
-        raise exceptions.InvalidTokenError()
+        raise exceptions.InvalidCredentialsError("Invalid token. You need to login again")
 
     return token_data
 

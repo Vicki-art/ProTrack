@@ -1,9 +1,10 @@
 import pydantic
-from fastapi import APIRouter, Depends, status, Query, Request
+from fastapi import APIRouter, Depends, status, Query, Request, UploadFile, File, BackgroundTasks
 from app import oauth2, schemas
 from sqlalchemy.orm import Session
-from app.services import projects_services
+from app.services import projects_services, documents_services
 from urllib.parse import urlencode
+from typing import List
 from app.db import get_db
 
 router = APIRouter()
@@ -129,3 +130,36 @@ def share_project(
 
     return {"Emulate sending email": f"Sending access link to email: {email}",
             "Access Link attached to email": share_url}
+
+
+@router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_project(
+    project_id: int,
+    background_tasks: BackgroundTasks,
+    current_user=Depends(oauth2.get_current_user),
+    db: Session = Depends(get_db)):
+
+    projects_services.delete_project(project_id, background_tasks, current_user, db)
+
+    return
+
+@router.post("/{project_id}/documents", status_code=status.HTTP_201_CREATED)
+async def upload_project_documents(
+    project_id: int,
+    files: List[UploadFile] = File(...),
+    current_user=Depends(oauth2.get_current_user),
+    db: Session = Depends(get_db)):
+
+    project_docs = documents_services.upload_project_related_docs(project_id, files, current_user, db)
+
+    return {"message": f"{len(project_docs)} doc(s) were downloaded"}
+
+@router.get("/{project_id}/documents", response_model=list[schemas.FilesOut], status_code=status.HTTP_200_OK)
+async def get_project_documents(
+    project_id: int,
+    current_user=Depends(oauth2.get_current_user),
+    db: Session = Depends(get_db)):
+
+    project_docs = documents_services.get_project_related_docs(project_id, current_user, db)
+
+    return project_docs

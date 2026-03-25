@@ -4,13 +4,13 @@ from sqlalchemy.exc import SQLAlchemyError
 
 def update_profile(user_id, profile_info, current_user, db):
     if user_id != current_user.id:
-        raise exceptions.OnlyOwnerCanModifyError()
+        raise exceptions.ForbiddenActionError("You can not modify this profile")
 
     current_user_profile = db.query(models.Profile).filter(
         models.Profile.user_id == current_user.id).first()
 
     if not current_user_profile:
-        raise exceptions.ProfileNotFoundError()
+        raise exceptions.NotFoundError("Profile not found")
 
     current_user_profile.first_name = profile_info.first_name
     current_user_profile.last_name = profile_info.last_name
@@ -21,7 +21,7 @@ def update_profile(user_id, profile_info, current_user, db):
         db.refresh(current_user_profile)
     except SQLAlchemyError as e:
         db.rollback()
-        raise exceptions.DatabaseError()
+        raise exceptions.DatabaseError(detail=str(e))
 
     return current_user_profile
 
@@ -29,7 +29,7 @@ def update_profile(user_id, profile_info, current_user, db):
 def show_profile(user_id, db):
     searched_profile = db.query(models.Profile).filter(models.Profile.user_id == user_id).first()
     if not searched_profile:
-        raise exceptions.UserNotFoundError
+        raise exceptions.NotFoundError("User not found")
 
     return searched_profile
 

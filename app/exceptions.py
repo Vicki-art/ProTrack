@@ -1,55 +1,38 @@
-class TokenExpiredError(Exception):
-    pass
+from fastapi import status
 
 
-class InvalidTokenError(Exception):
-    pass
+class AppException(Exception):
+    def __init__(self, detail: str, status_code: int, public_detail: str | None = None):
+        self.detail = detail
+        self.public_detail = public_detail or detail
+        self.status_code = status_code
 
 
-class UsernameAlreadyExistsError(Exception):
-    pass
+class InvalidCredentialsError(AppException):
+    def __init__(self, detail="Could not validate credentials"):
+        super().__init__(detail, status.HTTP_401_UNAUTHORIZED)
+        self.headers = {"WWW-Authenticate": "Bearer"}
 
 
-class InvalidCredentialsError(Exception):
-    pass
+class NotFoundError(AppException):
+    def __init__(self, detail="Not Found"):
+        super().__init__(detail, status.HTTP_404_NOT_FOUND)
 
 
-class ProjectNotFoundError(Exception): #Done
-    pass
+class ForbiddenActionError(AppException):
+    def __init__(self, detail="Forbidden"):
+        super().__init__(detail, status.HTTP_403_FORBIDDEN)
 
 
-class UserNotFoundError(Exception): #Done
-    pass
+class DataConflictError(AppException):
+    def __init__(self, detail="Conflict error"):
+        super().__init__(detail, status.HTTP_409_CONFLICT)
 
 
-class AccessForbiddenError(Exception): #Done
-    pass
-
-
-class OnlyOwnerCanModifyError(Exception): #Done
-    pass
-
-
-class DuplicateParticipantError(Exception): #Done
-    pass
-
-
-class IsNotCurrentParticipantError(Exception):
-    pass
-
-
-class UserIsAlreadyParticipatedInProjectError(Exception):
-    pass
-
-
-class DatabaseError(Exception):
-    pass
-
-class ProfileNotFoundError(Exception):
-    pass
-
-
-class AccessLinkInvalidError(Exception):
-    pass
-
-
+class DatabaseError(AppException):
+    def __init__(self, detail="Internal server error"):
+        super().__init__(
+            detail=detail,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            public_detail="Internal server error"
+        )

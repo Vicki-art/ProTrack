@@ -13,7 +13,7 @@ def create_user(user, db):
         .filter(models.User.username == user.username)\
         .first()
     if existing_user:
-        raise exceptions.UsernameAlreadyExistsError()
+        raise exceptions.DataConflictError("Username already exists")
 
     try:
         db.add(new_user)
@@ -22,7 +22,7 @@ def create_user(user, db):
 
     except SQLAlchemyError as e:
         db.rollback()
-        raise exceptions.DatabaseError()
+        raise exceptions.DatabaseError(detail=str(e))
 
     return new_user
 

@@ -76,3 +76,14 @@ class ProjectOut(BaseModel):
 
 class ParticipantActionResquest(BaseModel):
     user_id: int
+
+class FilesOut(BaseModel):
+    id: int
+    original_filename: str
+    file_key: str
+    size: int
+    content_type: str
+    general_purpose: bool
+
+    class Config:
+        orm_mode = True

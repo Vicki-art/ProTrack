@@ -13,6 +13,7 @@ def update_profile_info(
         profile_info: schemas.ProfileIn,
         current_user = Depends(oauth2.get_current_user),
         db: Session = Depends(get_db)):
+
     updated_profile = users_services.update_profile(user_id,
                                                     profile_info,
                                                     current_user,

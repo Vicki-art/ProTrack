@@ -42,13 +42,13 @@ def verify_project_access_token(project_token: str) -> schemas.ProjectTokenData:
         project_id: str = payload.get("project_id", None)
         if owner_id is None or project_id is None:
             print("here")
-            raise exceptions.AccessLinkInvalidError()
+            raise exceptions.NotFoundError("Invalid access link")
         project_token_data = schemas.ProjectTokenData(owner_id=owner_id, project_id=project_id)
     except jwt.ExpiredSignatureError:
         raise exceptions.TokenExpiredError()
 
     except jwt.InvalidTokenError:
-        raise exceptions.AccessLinkInvalidError()
+        raise exceptions.NotFoundError("Invalid access link")
 
     return project_token_data
 
@@ -63,6 +63,6 @@ def get_project_data_from_token(token: str, db: Session):
         models.Project.id == token_data.project_id).first()
 
     if not owner or not project:
-        raise exceptions.AccessLinkInvalidError()
+        raise exceptions.NotFoundError("Access link invalid")
 
     return owner, project
