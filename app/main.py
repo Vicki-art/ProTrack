@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from app.routers import auth, projects, documents, users
 from app.exception_handlers import register_exception_handlers
 
-app = FastAPI(title="Project Management Service")
+app = FastAPI(title="Project Management App")
 
 register_exception_handlers(app)
 
@@ -13,10 +13,10 @@ app.include_router(documents.router, prefix="/documents", tags=["documents"])
 
 @app.get("/")
 def root():
-    return {"message": "Project Management Service is running"}
+    return {"message": "Project Management App is running"}
 
 def register():
-    return {"message": "Project Management Service is running"}
+    return {"message": "Project Management App is running"}
 
 if __name__ == "__main__":
     import uvicorn

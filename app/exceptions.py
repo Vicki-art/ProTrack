@@ -2,7 +2,20 @@ from fastapi import status
 
 
 class AppException(Exception):
-    def __init__(self, detail: str, status_code: int, public_detail: str | None = None):
+    """
+    Parent exception class for application exceptions
+
+    params:
+        detail (str): error description for inner use
+        public_detail (str): error description to show to client
+        status_code (int): HTTP status code
+    """
+    def __init__(
+            self,
+            detail: str,
+            status_code: int,
+            public_detail: str | None = None
+    ):
         self.detail = detail
         self.public_detail = public_detail or detail
         self.status_code = status_code

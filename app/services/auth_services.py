@@ -1,19 +1,28 @@
-from app import utils, models, oauth2
 from sqlalchemy.exc import SQLAlchemyError
-from app import exceptions
+from sqlalchemy.orm import Session
+
+from app import utils, models, oauth2, exceptions, schemas
 
 
-def create_user(user, db):
-    hashed_password = utils.hash(user.password)
+def create_user(
+        user: models.User,
+        db: Session
+) -> models.User:
 
-    new_user = models.User(username=user.username,
-                           password=hashed_password, profile=models.Profile())
+    hashed_password = utils.hash_password(user.password)
 
-    existing_user = db.query(models.User)\
-        .filter(models.User.username == user.username)\
-        .first()
+    existing_user: models.User | None = db.query(models.User).filter(
+        models.User.username == user.username
+    ).first()
+
     if existing_user:
         raise exceptions.DataConflictError("Username already exists")
+
+    new_user = models.User(
+        username=user.username,
+        password=hashed_password,
+        profile=models.Profile()
+    )
 
     try:
         db.add(new_user)
@@ -22,14 +31,18 @@ def create_user(user, db):
 
     except SQLAlchemyError as e:
         db.rollback()
-        raise exceptions.DatabaseError(detail=str(e))
+        raise exceptions.DatabaseError()
 
     return new_user
 
 
-def login(user_credentials, db):
-    user = db.query(models.User).filter(
-        models.User.username == user_credentials.login).first()
+def login(
+        user_credentials: schemas.LoginCredentials,
+        db: Session
+) -> str:
+    user: models.User | None = db.query(models.User).filter(
+        models.User.username == user_credentials.login
+    ).first()
 
     if not user:
         raise exceptions.InvalidCredentialsError()
@@ -37,5 +50,7 @@ def login(user_credentials, db):
     if not utils.verify(user_credentials.password, user.password):
         raise exceptions.InvalidCredentialsError()
 
-    access_token = oauth2.create_access_token(data={"user_id": str(user.id)})
+    access_token = oauth2.create_access_token(
+        data={"user_id": str(user.id)}
+    )
     return access_token

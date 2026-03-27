@@ -1,23 +1,27 @@
-from sqlalchemy.orm import relationship
-from sqlalchemy import Column, Integer, String, BigInteger, Boolean, DateTime, ForeignKey, UniqueConstraint, Text, Enum, func
-from sqlalchemy.ext.associationproxy import association_proxy
-from app.db import Base
 import enum
+
+import sqlalchemy as sa
+from sqlalchemy.orm import relationship
+from sqlalchemy.ext.associationproxy import association_proxy
+
+from app.db import Base
+
 
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True)
-    username = Column(String(50), nullable=False)
-    password = Column(String(255), nullable=False)
-    created_at = Column(
-        DateTime(timezone=True),
+    id = sa.Column(sa.Integer, primary_key=True)
+    username = sa.Column(sa.String(50), nullable=False)
+    password = sa.Column(sa.String(255), nullable=False)
+    created_at = sa.Column(
+        sa.DateTime(timezone=True),
         nullable=False,
-        server_default=func.now()
+        server_default=sa.func.now()
     )
-    added_documents = relationship(
-        "ProjectDocument",
-        back_populates="added_by_user"
+
+    uploaded_documents = relationship(
+        "Document",
+        back_populates="uploaded_by_user"
     )
 
     profile = relationship(
@@ -39,29 +43,26 @@ class User(Base):
         back_populates="owner"
     )
 
-    created_docs = relationship(
-        "File",
-        foreign_keys="[File.uploaded_by]",
-        back_populates="creator"
-    )
-
     projects = association_proxy(
         "project_memberships",
         "project"
     )
 
-    __table_args__ = (UniqueConstraint("username", name="unique_username"),)
+    __table_args__ = (
+        sa.UniqueConstraint("username", name="unique_username"),
+    )
+
 
 class Profile(Base):
     __tablename__ = "profiles"
 
-    id = Column(Integer, primary_key=True)
-    first_name = Column(String(100))
-    last_name = Column(String(100))
-    email = Column(String(254), unique=True)
-    user_id = Column(
-        Integer,
-        ForeignKey("users.id"),
+    id = sa.Column(sa.Integer, primary_key=True)
+    first_name = sa.Column(sa.String(100))
+    last_name = sa.Column(sa.String(100))
+    email = sa.Column(sa.String(254), unique=True)
+    user_id = sa.Column(
+        sa.Integer,
+        sa.ForeignKey("users.id"),
         unique=True,
         nullable=False
     )
@@ -75,18 +76,19 @@ class Profile(Base):
 class Project(Base):
     __tablename__ = "projects"
 
-    id = Column(Integer, primary_key=True)
-    name = Column(String(255))
-    description = Column(Text)
-    created_at = Column(
-        DateTime(timezone=True),
+    id = sa.Column(sa.Integer, primary_key=True)
+    name = sa.Column(sa.String(255))
+    description = sa.Column(sa.Text)
+    created_at = sa.Column(
+        sa.DateTime(timezone=True),
         nullable=False,
-        server_default=func.now()
+        server_default=sa.func.now()
     )
 
-    owner_id = Column(
-        Integer,
-        ForeignKey("users.id", ondelete="SET NULL"),
+    owner_id = sa.Column(
+        sa.Integer,
+        sa.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
         name="fk_projects_owner_id"
     )
 
@@ -102,18 +104,19 @@ class Project(Base):
         cascade="all, delete-orphan"
     )
 
-    project_docs = relationship(
-        "ProjectDocument",
+    docs = relationship(
+        "Document",
         back_populates="project",
-        foreign_keys="[ProjectDocument.project_id]",
-        cascade="all, delete-orphan"
+        foreign_keys="[Document.project_id]",
+        primaryjoin="and_(Project.id==Document.project_id, Document.to_delete==False)",
+        lazy="selectin"
     )
-
 
     users = association_proxy(
         "project_memberships",
         "user"
     )
+
 
 class ProjectRole(enum.Enum):
     participant = "participant"
@@ -122,9 +125,19 @@ class ProjectRole(enum.Enum):
 class UserProject(Base):
     __tablename__ = "users_projects"
 
-    user_id = Column(Integer, ForeignKey("users.id"), primary_key=True, nullable=False)
-    project_id = Column(Integer, ForeignKey("projects.id"), primary_key=True, nullable=False)
-    role = Column(Enum(ProjectRole, name="projectrole", create_type=False), nullable=False)
+    user_id = sa.Column(
+        sa.Integer,
+        sa.ForeignKey("users.id"),
+        primary_key=True,
+        nullable=False)
+    project_id = sa.Column(
+        sa.Integer,
+        sa.ForeignKey("projects.id"),
+        primary_key=True,
+        nullable=False)
+    role = sa.Column(
+        sa.Enum(ProjectRole, name="projectrole", create_type=False),
+        nullable=False)
 
     user = relationship(
         "User",
@@ -136,78 +149,31 @@ class UserProject(Base):
         back_populates="project_memberships"
     )
 
-class ProjectDocument(Base):
-    __tablename__ = "project_documents"
 
-    id = Column(Integer, primary_key=True, nullable=False)
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
-    file_id = Column(Integer, ForeignKey("files.id"), nullable=False)
-    added_by = Column(Integer, ForeignKey("users.id"), nullable=False)
-    added_at = Column(
-        DateTime(timezone=True),
+class Document(Base):
+    __tablename__ = "documents"
+
+    id = sa.Column(sa.Integer, primary_key=True, nullable=False)
+    original_filename = sa.Column(sa.String, nullable=False)
+    file_key = sa.Column(sa.String, unique=True, nullable=False)
+    size = sa.Column(sa.BigInteger, nullable=False)
+    content_type = sa.Column(sa.String, nullable=False)
+    project_id = sa.Column(sa.Integer, sa.ForeignKey("projects.id"), nullable=True, index=True)
+    to_delete = sa.Column(sa.Boolean, default=False, index=True)
+    uploaded_by = sa.Column(sa.Integer, sa.ForeignKey("users.id"), nullable=False)
+    uploaded_at = sa.Column(
+        sa.DateTime(timezone=True),
         nullable=False,
-        server_default=func.now()
+        server_default=sa.func.now()
     )
-
 
     project = relationship(
         "Project",
-        back_populates="project_docs"
+        back_populates="docs"
     )
 
-    file = relationship(
-        "File",
-        back_populates="project_links",
-    )
-
-
-    added_by_user = relationship(
-        "User",
-        foreign_keys=[added_by],
-        back_populates="added_documents"
-    )
-
-    __table_args__ = (
-        UniqueConstraint("project_id", "file_id", name="uq_project_file"),
-    )
-
-
-
-class File(Base):
-    __tablename__ = "files"
-
-    id = Column(Integer, primary_key=True, nullable=False)
-    original_filename = Column(String, nullable=False)
-    file_key = Column(String, unique=True, nullable=False)
-    size = Column(BigInteger, nullable=False)
-    content_type = Column(String, nullable=False)
-    general_purpose = Column(Boolean, default=True)
-    to_delete = Column(Boolean, default=False)
-    uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=False)
-    uploaded_at = Column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now()
-    )
-
-    creator = relationship(
+    uploaded_by_user = relationship(
         "User",
         foreign_keys=[uploaded_by],
-        back_populates="created_docs"
+        back_populates="uploaded_documents"
     )
-
-
-    project_links = relationship(
-        "ProjectDocument",
-        back_populates="file",
-        cascade="all, delete-orphan"
-    )
-
-
-
-
-
-
-
-
-

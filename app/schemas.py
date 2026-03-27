@@ -1,6 +1,7 @@
-from pydantic import BaseModel, model_validator, field_validator, Field, EmailStr
-from datetime import datetime
 import re
+from datetime import datetime
+
+from pydantic import BaseModel, model_validator, field_validator, Field, EmailStr
 
 
 class UserCreate(BaseModel):
@@ -59,9 +60,11 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     id: str | None = None
 
+
 class ProjectTokenData(BaseModel):
     owner_id: str | None = None
     project_id: str | None = None
+
 
 class ProjectIn(BaseModel):
     name: str = Field(min_length=2, max_length=255)
@@ -74,8 +77,6 @@ class ProjectOut(BaseModel):
     description: str
     owner: ProfileOut
 
-class ParticipantActionResquest(BaseModel):
-    user_id: int
 
 class FilesOut(BaseModel):
     id: int
@@ -83,7 +84,15 @@ class FilesOut(BaseModel):
     file_key: str
     size: int
     content_type: str
-    general_purpose: bool
 
     class Config:
         orm_mode = True
+
+
+class UploadDocsResponse(BaseModel):
+    uploaded_documents: list[FilesOut]
+
+
+
+class MessageResponse(BaseModel):
+    message: str

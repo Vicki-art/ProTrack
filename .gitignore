@@ -1,7 +1,11 @@
 __pycache__/
+.idea/
 *.pyc
 *.pyo
 venv/
 .env
 *.db
 .python-version
+storage/
+*.log
+logs/

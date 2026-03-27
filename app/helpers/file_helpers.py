@@ -1,8 +1,12 @@
+import logging
 import os
 import uuid
+
 from fastapi import UploadFile
 
 UPLOAD_DIR = "storage"
+
+logger = logging.getLogger(__name__)
 
 def save_file(file: UploadFile):
     ext = os.path.splitext(file.filename)[1].lower()
@@ -28,14 +32,20 @@ def rollback_files_saving(saved_files: list):
             os.remove(file_path)
     return
 
-def delete_files(files_to_delete):
-    for key in files_to_delete:
-        file_path = os.path.join(UPLOAD_DIR, key)
+def delete_files(file_to_delete_key: str) -> None:
 
-        if not os.path.exists(file_path):
-            continue
+    file_path = os.path.join(UPLOAD_DIR, file_to_delete_key)
 
-        try:
-            os.remove(file_path)
-        except Exception as e:
-            raise
+    try:
+        os.remove(file_path)
+    except FileNotFoundError as e:
+        logger.exception(
+            "Background task failed: delete_files",
+            extra={"file_paths": file_path},
+        )
+    except Exception:
+        logger.exception(
+            "Unexpected error while deleting file",
+            extra={"file_path": file_path},
+        )
+    return
