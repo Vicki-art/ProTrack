@@ -1,7 +1,9 @@
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app import utils, models, oauth2, exceptions, schemas
+from app.core import schemas, oauth2
+from app.database import models
+from app.exceptions import exceptions
+from app.database.db import db_transaction
 
 
 def create_user(
@@ -9,7 +11,7 @@ def create_user(
         db: Session
 ) -> models.User:
 
-    hashed_password = utils.hash_password(user.password)
+    hashed_password = oauth2.hash_password(user.password)
 
     existing_user: models.User | None = db.query(models.User).filter(
         models.User.username == user.username
@@ -18,20 +20,15 @@ def create_user(
     if existing_user:
         raise exceptions.DataConflictError("Username already exists")
 
-    new_user = models.User(
-        username=user.username,
-        password=hashed_password,
-        profile=models.Profile()
-    )
-
-    try:
+    with db_transaction(db):
+        new_user = models.User(
+            username=user.username,
+            password=hashed_password,
+            profile=models.Profile()
+        )
         db.add(new_user)
-        db.commit()
-        db.refresh(new_user)
 
-    except SQLAlchemyError as e:
-        db.rollback()
-        raise exceptions.DatabaseError()
+    db.refresh(new_user)
 
     return new_user
 
@@ -47,7 +44,7 @@ def login(
     if not user:
         raise exceptions.InvalidCredentialsError()
 
-    if not utils.verify(user_credentials.password, user.password):
+    if not oauth2.verify(user_credentials.password, user.password):
         raise exceptions.InvalidCredentialsError()
 
     access_token = oauth2.create_access_token(

@@ -2,36 +2,25 @@ from datetime import datetime, timedelta
 from typing import Any, Dict
 
 import jwt
-from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
-from app import schemas, exceptions, models
-from app.config import settings
+from app.core import schemas
+from app.database import models
+from app.exceptions import exceptions
+from app.core.config import settings
 
-
-pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
-
-
-def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
-
-
-def verify(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
-
-
-SECRET_KEY = settings.secret_key
-ALGORITHM = settings.algorithm
-ACCESS_TOKEN_EXPIRE_MINUTES = settings.access_token_expire_minutes
+INVITE_SECRET_KEY = settings.secret_key
+INVITE_ALGORITHM = settings.algorithm
+INVITE_ACCESS_TOKEN_EXPIRE_MINUTES = settings.access_token_expire_minutes
 
 
 def create_project_access_token(data: Dict[str, Any]) -> str:
     to_encode = data.copy()
 
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.utcnow() + timedelta(minutes=INVITE_ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
 
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, INVITE_SECRET_KEY, algorithm=INVITE_ALGORITHM)
 
     return encoded_jwt
 
@@ -41,8 +30,8 @@ def verify_project_access_token(project_token: str) -> schemas.ProjectTokenData:
     try:
         payload: Dict[str, Any] = jwt.decode(
             project_token,
-            SECRET_KEY,
-            algorithms=[ALGORITHM]
+            INVITE_SECRET_KEY,
+            algorithms=[INVITE_ALGORITHM]
         )
 
         owner_id: str | None = payload.get("owner_id", None)

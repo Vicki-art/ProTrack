@@ -2,8 +2,10 @@ from typing import Tuple
 
 from sqlalchemy.orm import Session
 
-from app import models, exceptions, db
-from app.helpers.file_helpers import delete_files
+from app.database import models, db
+from app.exceptions import exceptions
+from app.storage.base import BaseStorage
+
 
 
 def get_project_or_error(
@@ -78,12 +80,13 @@ def project_and_user_status(
     return (project, is_owner, is_participant)
 
 
-def clean_up_docs(file_keys: str) -> None:
+def clean_up_docs(file_keys: list, storage: BaseStorage) -> None:
     cleanup_db_session = db.SessionLocal()
-
     try:
         for file_key in file_keys:
-            delete_files(file_key)
+
+            storage.delete_file(file_key)
+
             cleanup_db_session.delete(cleanup_db_session.query(models.Document).filter(
                 models.Document.file_key == file_key).first())
 
@@ -100,7 +103,9 @@ def clean_up_docs(file_keys: str) -> None:
 def get_doc_or_error(doc_id: int, db: Session) -> models.Document:
     doc: models.Document | None = db.query(models.Document).filter(
         models.Document.id == doc_id,
-        models.Document.to_delete == False).first()
+        models.Document.to_delete == False,
+        models.Document.project_id.is_not(None)
+    ).first()
 
     if not doc:
         raise exceptions.NotFoundError("Document not found")
@@ -115,9 +120,10 @@ def document_access_check(
 
     full_access_allowed = document.project.owner_id == user_id
     access_as_project_participant = False
-    for u in document.project.project_memberships:
-        if user_id == u.user_id:
-            access_as_project_participant = True
-            break
+    if document.project is not None:
+        for u in document.project.project_memberships:
+            if user_id == u.user_id:
+                access_as_project_participant = True
+                break
 
     return full_access_allowed, access_as_project_participant

@@ -1,4 +1,4 @@
-from fastapi import status
+from http import HTTPStatus
 
 
 class AppException(Exception):
@@ -23,29 +23,34 @@ class AppException(Exception):
 
 class InvalidCredentialsError(AppException):
     def __init__(self, detail="Could not validate credentials"):
-        super().__init__(detail, status.HTTP_401_UNAUTHORIZED)
+        super().__init__(detail, HTTPStatus.UNAUTHORIZED)
         self.headers = {"WWW-Authenticate": "Bearer"}
 
 
 class NotFoundError(AppException):
     def __init__(self, detail="Not Found"):
-        super().__init__(detail, status.HTTP_404_NOT_FOUND)
+        super().__init__(detail, HTTPStatus.NOT_FOUND)
 
 
 class ForbiddenActionError(AppException):
     def __init__(self, detail="Forbidden"):
-        super().__init__(detail, status.HTTP_403_FORBIDDEN)
+        super().__init__(detail, HTTPStatus.FORBIDDEN)
+
+
+class ValidationError(AppException):
+    def __init__(self, detail="Validation failed"):
+        super().__init__(detail, HTTPStatus.UNPROCESSABLE_ENTITY)
 
 
 class DataConflictError(AppException):
     def __init__(self, detail="Conflict error"):
-        super().__init__(detail, status.HTTP_409_CONFLICT)
+        super().__init__(detail, HTTPStatus.CONFLICT)
 
 
 class DatabaseError(AppException):
     def __init__(self, detail="Internal server error"):
         super().__init__(
             detail=detail,
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
             public_detail="Internal server error"
         )

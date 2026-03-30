@@ -2,13 +2,16 @@ from typing import Dict, Any
 from datetime import datetime, timedelta
 
 import jwt
+from passlib.context import CryptContext
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
-from app import schemas, models, exceptions
-from app.config import settings
-from app.db import get_db
+from app.core import schemas
+from app.database import models
+from app.exceptions import exceptions
+from app.core.config import settings
+from app.database.db import get_db
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='login')
@@ -16,6 +19,16 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl='login')
 SECRET_KEY = settings.secret_key
 ALGORITHM = settings.algorithm
 ACCESS_TOKEN_EXPIRE_MINUTES = settings.access_token_expire_minutes
+
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+
+
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+
+def verify(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
 
 
 def create_access_token(data: Dict[str, Any]) -> str:

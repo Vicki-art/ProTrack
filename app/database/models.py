@@ -4,7 +4,7 @@ import sqlalchemy as sa
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.associationproxy import association_proxy
 
-from app.db import Base
+from app.database.db import Base
 
 
 class User(Base):
@@ -90,6 +90,12 @@ class Project(Base):
         sa.ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
         name="fk_projects_owner_id"
+    )
+
+    storage_used_bytes = sa.Column(
+        sa.BigInteger,
+        default=0,
+        nullable=False
     )
 
     owner = relationship(

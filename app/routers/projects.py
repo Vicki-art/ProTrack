@@ -5,9 +5,10 @@ from fastapi import APIRouter, Depends, status, Query, Request, UploadFile, File
 from sqlalchemy.orm import Session
 from urllib.parse import urlencode
 
-from app import oauth2, schemas, models
+from app.core import schemas, oauth2
+from app.database import models
 from app.services import projects_services, documents_services
-from app.db import get_db
+from app.database.db import get_db
 
 router = APIRouter()
 

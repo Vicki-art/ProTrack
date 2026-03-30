@@ -1,28 +1,34 @@
 from fastapi import APIRouter, UploadFile, Depends, status, BackgroundTasks
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app import schemas, oauth2, models
-from app.db import get_db
+from app.core import schemas, oauth2
+from app.database import models
+from app.database.db import get_db
 from app.services import documents_services
+from app.storage.factory import get_storage
 
 router = APIRouter()
 
+
 @router.get(
     "/{document_id}",
-    response_model=schemas.FilesOut,
+    response_model=None,
     status_code=status.HTTP_200_OK
 )
 def get_document(
     document_id: int,
     current_user: models.User = Depends(oauth2.get_current_user),
     db: Session = Depends(get_db)
-) -> models.Document:
+) -> StreamingResponse:
     """
     Get document ingo by ID (can be performed by project owner or by participant)
     """
     doc = documents_services.get_doc_by_id(document_id, current_user, db)
 
-    return doc
+    storage = get_storage()
+
+    return storage.get_file_response(doc)
 
 
 @router.delete(
@@ -39,8 +45,6 @@ def delete_document(
     Delete document by ID (can be performed by project owner)
     """
     documents_services.delete_doc_by_id(document_id, background_tasks, current_user, db)
-
-    return
 
 
 @router.put(

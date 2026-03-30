@@ -2,10 +2,13 @@ from typing import List
 
 from fastapi import BackgroundTasks
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import SQLAlchemyError
 
-from app import exceptions, models, utils, schemas
-from app.helpers.db_helpers import (
+from app.core import schemas, utils
+from app.database import models
+from app.database.db import db_transaction
+from app.exceptions import exceptions
+from app.storage.factory import get_storage
+from app.database.db_helpers import (
     clean_up_docs,
     get_project_or_error,
     check_membership,
@@ -19,17 +22,14 @@ def create_project(
         db: Session
 ) -> models.Project:
 
-    new_project = models.Project(name=project_info.name,
-                                 description=project_info.description,
-                                 owner_id=current_user.id
-                                 )
-    try:
+    with db_transaction(db):
+        new_project = models.Project(name=project_info.name,
+                                     description=project_info.description,
+                                     owner_id=current_user.id
+                                     )
         db.add(new_project)
-        db.commit()
-        db.refresh(new_project)
-    except SQLAlchemyError as e:
-        db.rollback()
-        raise exceptions.DatabaseError(detail=str(e))
+
+    db.refresh(new_project)
 
     return new_project
 
@@ -68,14 +68,10 @@ def modify_project(
     if not is_owner and not is_participant:
         raise exceptions.ForbiddenActionError("You have no access")
 
-    project_to_update.name = updated_fields.name
-    project_to_update.description = updated_fields.description
+    with db_transaction(db):
+        project_to_update.name = updated_fields.name
+        project_to_update.description = updated_fields.description
 
-    try:
-        db.commit()
-        db.refresh(project_to_update)
-    except SQLAlchemyError as e:
-        raise exceptions.DatabaseError(detail=str(e))
 
     return project_to_update
 
@@ -103,17 +99,12 @@ def add_new_participant(
     if is_current_participant:
         raise exceptions.DataConflictError("User has already been added to the project")
 
-    new_membership = models.UserProject(project_id=project_id,
+    with db_transaction(db):
+        new_membership = models.UserProject(project_id=project_id,
                                         user_id=new_participant.id,
                                         role=models.ProjectRole.participant)
-
-    try:
         db.add(new_membership)
-        db.commit()
-        db.refresh(new_membership)
-    except SQLAlchemyError as e:
-        db.rollback()
-        raise exceptions.DatabaseError(detail=str(e))
+    db.refresh(new_membership)
 
     return new_membership
 
@@ -147,13 +138,8 @@ def delete_participant(
             "User has no membership in the project"
         )
 
-    try:
+    with db_transaction(db):
         db.delete(project_membership)
-        db.commit()
-    except SQLAlchemyError as e:
-        raise exceptions.DatabaseError(detail=str(e))
-
-    return
 
 
 def share_participation(
@@ -212,26 +198,15 @@ def delete_project(
 
     files_to_cleanup: List[str] = []
 
-    try:
+    with db_transaction(db):
         for doc in project_to_delete.docs:
             doc.to_delete = True
             doc.project_id = None
             files_to_cleanup.append(doc.file_key)
-        db.commit()
-    except SQLAlchemyError as e:
-        db.rollback()
-        raise exceptions.DatabaseError(detail=str(e))
-    except Exception as e:
-        db.rollback()
-        raise
 
-    try:
+    with db_transaction(db):
         db.delete(project_to_delete)
-        db.commit()
-    except SQLAlchemyError as e:
-        db.rollback()
-        raise exceptions.DatabaseError(detail=str(e))
-    print(files_to_cleanup)
-    background_tasks.add_task(clean_up_docs, files_to_cleanup)
 
-    return
+
+    background_tasks.add_task(clean_up_docs, files_to_cleanup, storage=get_storage())
+

@@ -1,7 +1,9 @@
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app import exceptions, models, schemas
+from app.core import schemas
+from app.database import models
+from app.exceptions import exceptions
+from app.database.db import db_transaction
 
 
 def update_profile(
@@ -21,16 +23,12 @@ def update_profile(
     if current_user_profile is None:
         raise exceptions.NotFoundError("Profile not found")
 
-    current_user_profile.first_name = profile_info.first_name
-    current_user_profile.last_name = profile_info.last_name
-    current_user_profile.email = profile_info.email
+    with db_transaction(db):
+        current_user_profile.first_name = profile_info.first_name
+        current_user_profile.last_name = profile_info.last_name
+        current_user_profile.email = profile_info.email
 
-    try:
-        db.commit()
-        db.refresh(current_user_profile)
-    except SQLAlchemyError as e:
-        db.rollback()
-        raise exceptions.DatabaseError()
+    db.refresh(current_user_profile)
 
     return current_user_profile
 

@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from app.routers import auth, projects, documents, users
-from app.exception_handlers import register_exception_handlers
+from app.exceptions.exception_handlers import register_exception_handlers
 
 app = FastAPI(title="Project Management App")
 
