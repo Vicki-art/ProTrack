@@ -1,5 +1,4 @@
 import re
-from datetime import datetime
 import pydantic as py
 
 from app.storage.file_helpers import format_file_size
@@ -27,13 +26,13 @@ class UserCreate(py.BaseModel):
         return self
 
 
-class UserOut(py.BaseModel):
-    id: int
+class UserCreatedResponse(py.BaseModel):
+    message: str
+    user_id: int
     username: str
-    created_at: datetime
-
-    class Config:
-        orm_mode = True
+    first_name: str | None = None
+    last_name: str | None = None
+    email: str | None = None
 
 
 class ProfileIn(py.BaseModel):
@@ -67,6 +66,11 @@ class ProjectTokenData(py.BaseModel):
     project_id: str | None = None
 
 
+class ShareLinkResponse(py.BaseModel):
+    message: str
+    share_link: str
+
+
 class ProjectIn(py.BaseModel):
     name: str = py.Field(min_length=2, max_length=255)
     description: str = py.Field(max_length=5000)
@@ -86,20 +90,16 @@ class FilesOut(py.BaseModel):
     size: int
     content_type: str
 
-    class Config:
-        orm_mode = True
+    model_config = py.ConfigDict(from_attributes=True)
 
     @py.field_serializer("size")
     def serialize_size(self, value):
         return format_file_size(value)
 
 
-
 class UploadDocsResponse(py.BaseModel):
     uploaded_documents: list[FilesOut]
 
 
-
 class MessageResponse(py.BaseModel):
     message: str
-

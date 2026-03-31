@@ -17,13 +17,14 @@ def register_exception_handlers(app: FastAPI) -> None:
             exc: Exception
     ) -> JSONResponse:
 
-        logger.exception(f"Unhandled exception: {exc}")
+        logger.exception(
+            f"Unhandled exception | path={request.url.path} | method={request.method}"
+        )
 
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"detail": "Internal server error"}
         )
-
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(
@@ -38,6 +39,9 @@ def register_exception_handlers(app: FastAPI) -> None:
             }
             for err in exc.errors()
         ]
+        logger.warning(
+            f"Validation error | path={request.url.path} | method={request.method}"
+        )
 
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -47,7 +51,6 @@ def register_exception_handlers(app: FastAPI) -> None:
             }
         )
 
-
     @app.exception_handler(exceptions.AppException)
     async def application_error_handler(
             request: Request,
@@ -55,9 +58,14 @@ def register_exception_handlers(app: FastAPI) -> None:
     ) -> JSONResponse:
 
         if isinstance(exc, exceptions.DatabaseError):
-            logger.error(f"Database error: {exc.detail}", exc_info=True)
+            logger.error(
+                f"Database error | path={request.url.path} | method={request.method}",
+                exc_info=True
+            )
         else:
-            logger.warning(f"Application error: {exc.detail}")
+            logger.warning(
+                f"Application error | path={request.url.path} | method={request.method} | detail={exc.detail}"
+            )
 
         return JSONResponse(
             status_code=exc.status_code,

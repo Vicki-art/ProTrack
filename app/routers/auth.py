@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status, Request
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.database.db import get_db
@@ -10,32 +10,34 @@ router = APIRouter()
 
 
 @router.post(
-    "/auth",
-    status_code=status.HTTP_201_CREATED
+    "/register",
+    response_model=schemas.UserCreatedResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Register a new user",
+    description="Creates a new user account and returns user details."
 )
 def sign_up(
         user: schemas.UserCreate,
-        request: Request,
         db: Session = Depends(get_db)
-) -> dict:
+) -> schemas.UserCreatedResponse:
 
     new_user = auth_services.create_user(user, db)
-    profile_url = request.url_for("profile", user_id=new_user.id)
 
-    return {
-        "message": "User account was successfully created",
-        "user_id": new_user.id,
-        "username": new_user.username,
-        "first name": getattr(new_user.profile, "first_name", "N/A"),
-        "last name": getattr(new_user.profile, "last_name", "N/A"),
-        "email": getattr(new_user.profile, "email", "N/A"),
-        "profile_link": str(profile_url)
-        }
+    return schemas.UserCreatedResponse(
+        message="User account was successfully created.",
+        user_id=new_user.id,
+        username=new_user.username,
+        first_name=new_user.profile.first_name,
+        last_name=new_user.profile.last_name,
+        email=new_user.profile.email
+    )
 
 
 @router.post(
     '/login',
-    response_model=schemas.Token
+    response_model=schemas.Token,
+    summary="Authenticate user",
+    description="Logs in a user and returns a JWT access token."
 )
 def login(
         user_credentials: schemas.LoginCredentials,

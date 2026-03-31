@@ -12,7 +12,9 @@ from app.database.db_helpers import (
     clean_up_docs,
     get_project_or_error,
     check_membership,
-    get_user_by_username_or_error
+    get_user_by_username_or_error,
+    check_project_access,
+    check_project_access_allow_only_for_owner
 )
 
 
@@ -21,6 +23,17 @@ def create_project(
         current_user: models.User,
         db: Session
 ) -> models.Project:
+    """
+    Create a new project owned by the authenticated user.
+
+    Args:
+        project_info: Project input data.
+        current_user: Authenticated user.
+        db: Database session.
+
+    Returns:
+        Created Project ORM object.
+    """
 
     with db_transaction(db):
         new_project = models.Project(name=project_info.name,
@@ -39,17 +52,24 @@ def get_project_info(
         current_user: models.User,
         db: Session
 ) -> models.Project:
+    """
+    Retrieve project details if the user has access.
+
+    Args:
+        project_id: Project identifier.
+        current_user: Authenticated user.
+        db: Database session.
+
+    Returns:
+        Project ORM object.
+
+    Raises:
+        ForbiddenActionError: If access is denied.
+        NotFoundError: If project does not exist.
+    """
 
     requested_project = get_project_or_error(project_id, db)
-    is_owner = current_user.id == requested_project.owner_id
-
-    if is_owner:
-        return requested_project
-
-    is_participant = check_membership(project_id, current_user.id, db)
-
-    if not is_participant:
-        raise exceptions.ForbiddenActionError("You have no access")
+    check_project_access(requested_project, current_user, db, allow_participant=True)
 
     return requested_project
 
@@ -60,19 +80,31 @@ def modify_project(
         current_user: models.User,
         db: Session
 ) -> models.Project:
+    """
+    Update project name and description.
+
+    Args:
+        project_id: Project identifier.
+        updated_fields: New project data.
+        current_user: Authenticated user.
+        db: Database session.
+
+    Returns:
+        Updated Project ORM object.
+
+    Raises:
+        ForbiddenActionError: If access is denied.
+        NotFoundError: If project does not exist.
+    """
 
     project_to_update = get_project_or_error(project_id, db)
-    is_owner = current_user.id == project_to_update.owner_id
-    is_participant = check_membership(project_id, current_user.id, db)
-
-    if not is_owner and not is_participant:
-        raise exceptions.ForbiddenActionError("You have no access")
+    check_project_access(project_to_update, current_user, db, allow_participant=True)
 
     with db_transaction(db):
         project_to_update.name = updated_fields.name
         project_to_update.description = updated_fields.description
 
-
+    db.refresh(project_to_update)
     return project_to_update
 
 
@@ -82,14 +114,28 @@ def add_new_participant(
         current_user: models.User,
         db: Session
 ) -> models.UserProject:
-    project = get_project_or_error(project_id, db)
-    is_owner = current_user.id == project.owner_id
+    """
+    Add a new participant to the project by username.
 
-    if not is_owner:
-        raise exceptions.ForbiddenActionError("Only project owner can perform this action")
+    Args:
+        new_participant_username: Username of the user to add.
+        project_id: Project identifier.
+        current_user: Authenticated user (must be owner).
+        db: Database session.
+
+    Returns:
+        Created UserProject association.
+
+    Raises:
+        ForbiddenActionError: If user is not the project owner.
+        DataConflictError: If user is already a participant or invalid action.
+        NotFoundError: If user or project does not exist.
+    """
+    project = get_project_or_error(project_id, db)
+    check_project_access_allow_only_for_owner(project, current_user, db)
 
     if new_participant_username == current_user.username:
-        raise exceptions.DataConflictError("Owner has already participated in the project")
+        raise exceptions.DataConflictError("Owner is already a project member")
 
     new_participant = get_user_by_username_or_error(new_participant_username, db)
 
@@ -100,9 +146,11 @@ def add_new_participant(
         raise exceptions.DataConflictError("User has already been added to the project")
 
     with db_transaction(db):
-        new_membership = models.UserProject(project_id=project_id,
-                                        user_id=new_participant.id,
-                                        role=models.ProjectRole.participant)
+        new_membership = models.UserProject(
+            project_id=project_id,
+            user_id=new_participant.id,
+            role=models.ProjectRole.participant
+        )
         db.add(new_membership)
     db.refresh(new_membership)
 
@@ -115,14 +163,22 @@ def delete_participant(
         current_user: models.User,
         db: Session
 ) -> None:
+    """
+    Remove a participant from the project.
 
-    project_to_update = get_project_or_error(project_id, db)
-    is_owner = current_user.id == project_to_update.owner_id
+    Args:
+        project_id: Project identifier.
+        participant_username: Username of the user to remove.
+        current_user: Authenticated user (must be owner).
+        db: Database session.
 
-    if not is_owner:
-        raise exceptions.ForbiddenActionError(
-            "Only project owner can perform this action"
-        )
+    Raises:
+        ForbiddenActionError: If user is not the project owner.
+        DataConflictError: If user is not a participant or invalid action.
+        NotFoundError: If user or project does not exist.
+    """
+    project = get_project_or_error(project_id, db)
+    check_project_access_allow_only_for_owner(project, current_user, db)
 
     if participant_username == current_user.username:
         raise exceptions.DataConflictError(
@@ -147,15 +203,25 @@ def share_participation(
         current_user: models.User,
         db: Session
 ) -> str:
+    """
+    Generate a share token for project participation.
+
+    Args:
+        project_id: Project identifier.
+        current_user: Authenticated user (must be owner).
+        db: Database session.
+
+    Returns:
+        Share token string.
+
+    Raises:
+        ForbiddenActionError: If user is not the project owner.
+        NotFoundError: If project does not exist.
+    """
 
     shared_project = get_project_or_error(project_id, db)
 
-    is_owner = shared_project.owner_id == current_user.id
-
-    if not is_owner:
-        raise exceptions.ForbiddenActionError(
-            "Only project owner can perform this action"
-        )
+    check_project_access_allow_only_for_owner(shared_project, current_user, db)
 
     project_token = utils.create_project_access_token(data={
         "owner_id": str(current_user.id),
@@ -170,13 +236,44 @@ def join_project_via_link(
         current_user: models.User,
         db: Session
 ) -> models.Project:
+    """
+    Join a project using a share token.
+
+    Args:
+        token: Share token.
+        current_user: Authenticated user.
+        db: Database session.
+
+    Returns:
+        Project ORM object.
+
+    Raises:
+        NotFoundError: If token is invalid.
+        DataConflictError: If user is already a participant.
+    """
     owner, project = utils.get_project_data_from_token(token, db)
 
-    is_owner = project.owner_id == owner.id
-    if not is_owner:
+    if project.owner_id != owner.id:
         raise exceptions.NotFoundError("Invalid access link")
 
-    add_new_participant(current_user.username, project.id, owner, db)
+    if current_user.id == owner.id:
+        raise exceptions.DataConflictError(
+            "Owner is already a project member"
+        )
+
+    membership_exists = check_membership(project.id, current_user.id, db)
+    if membership_exists:
+        raise exceptions.DataConflictError(
+            "User is already a project participant"
+        )
+
+    with db_transaction(db):
+        membership = models.UserProject(
+            project_id=project.id,
+            user_id=current_user.id,
+            role=models.ProjectRole.participant
+        )
+        db.add(membership)
 
     return project
 
@@ -187,14 +284,22 @@ def delete_project(
         current_user: models.User,
         db: Session
 ) -> None:
+    """
+    Delete a project and schedule cleanup of related files.
+
+    Args:
+        project_id: Project identifier.
+        background_tasks: FastAPI background tasks manager.
+        current_user: Authenticated user (must be owner).
+        db: Database session.
+
+    Raises:
+        ForbiddenActionError: If user is not the project owner.
+        NotFoundError: If project does not exist.
+    """
 
     project_to_delete = get_project_or_error(project_id, db)
-    is_owner = project_to_delete.owner_id == current_user.id
-
-    if not is_owner:
-        raise exceptions.ForbiddenActionError(
-            "Only project owner can perform this action"
-        )
+    check_project_access_allow_only_for_owner(project_to_delete, current_user, db)
 
     files_to_cleanup: List[str] = []
 
@@ -204,9 +309,6 @@ def delete_project(
             doc.project_id = None
             files_to_cleanup.append(doc.file_key)
 
-    with db_transaction(db):
         db.delete(project_to_delete)
 
-
     background_tasks.add_task(clean_up_docs, files_to_cleanup, storage=get_storage())
-

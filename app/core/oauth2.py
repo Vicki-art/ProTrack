@@ -14,7 +14,7 @@ from app.core.config import settings
 from app.database.db import get_db
 
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl='login')
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl='/login')
 
 SECRET_KEY = settings.secret_key
 ALGORITHM = settings.algorithm
@@ -24,14 +24,38 @@ pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 
 def hash_password(password: str) -> str:
+    """
+    Hash a plain password using Argon2 algorithm.
+
+    Returns:
+        Secure hashed password string
+    """
     return pwd_context.hash(password)
 
 
 def verify(plain_password: str, hashed_password: str) -> bool:
+    """
+   Verify plain password against a hashed password.
+
+   Returns:
+       True if password matches, otherwise False
+   """
     return pwd_context.verify(plain_password, hashed_password)
 
 
 def create_access_token(data: Dict[str, Any]) -> str:
+    """
+    Create JWT access token with expiration.
+
+    Adds:
+    - 'exp' claim with expiration time
+
+    Args:
+        data: payload dictionary (must include user identifier)
+
+    Returns:
+        Encoded JWT access token string
+    """
     to_encode = data.copy()
 
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -43,10 +67,27 @@ def create_access_token(data: Dict[str, Any]) -> str:
 
 
 def verify_access_token(token: str) -> schemas.TokenData:
+    """
+    Decode and validate JWT access token.
+
+    Validates:
+    - Token signature
+    - Token expiration
+    - Presence of user_id in payload
+
+    Raises:
+        InvalidCredentialsError:
+            - if token is expired
+            - if token is invalid
+            - if user_id is missing
+
+    Returns:
+        TokenData containing authenticated user ID
+    """
 
     try:
         payload: Dict[str, Any] = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: str | None = payload.get("user_id", None)
+        user_id: int | None = payload.get("user_id", None)
 
         if user_id is None:
             raise exceptions.InvalidCredentialsError(
@@ -72,6 +113,22 @@ def get_current_user(
         token: str = Depends(oauth2_scheme),
         db: Session = Depends(get_db)
 ) -> models.User:
+    """
+    Retrieve authenticated user from JWT token.
+
+    Steps:
+    - Decode and validate JWT token
+    - Extract user_id from token
+    - Fetch user from database
+
+    Raises:
+        InvalidCredentialsError:
+            - if token is invalid or expired
+            - if user does not exist
+
+    Returns:
+        Authenticated User instance
+    """
 
     token_data = verify_access_token(token)
 

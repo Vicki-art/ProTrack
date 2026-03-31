@@ -30,5 +30,11 @@ class Settings(BaseSettings):
         extra="ignore"
     )
 
+    def DATABASE_URL(self):
+        return (
+            f"postgresql://{self.database_username}:{self.database_password}"
+            f"@{self.database_hostname}:{self.database_port}/{self.database_name}"
+        )
+
 
 settings = Settings()

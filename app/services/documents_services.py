@@ -1,24 +1,21 @@
 from typing import List
 
-from fastapi import UploadFile, BackgroundTasks
+from fastapi import UploadFile
 from sqlalchemy.orm import Session
 
 from app.database import models
 from app.database.db import db_transaction
-from app.exceptions import exceptions
 from app.storage.file_helpers import (
     rollback_files_saving,
     get_file_size,
     validate_file_size_per_project
 )
-from app.storage.factory import get_storage
+from app.storage.base import BaseStorage
 from app.database.db_helpers import (
-    clean_up_docs,
-    project_and_user_status,
-    check_membership,
     get_project_or_error,
     get_doc_or_error,
-    document_access_check
+    check_project_access,
+    check_project_access_allow_only_for_owner
 )
 
 
@@ -26,15 +23,29 @@ def upload_project_related_docs(
         project_id: int,
         docs: List[UploadFile],
         current_user: models.User,
-        db: Session
+        db: Session,
+        storage: BaseStorage
 ) -> list[models.Document]:
+    """
+    Upload multiple documents to a project.
+
+    Checks:
+    - User must be project owner or participant
+    - Project storage limits must not be exceeded
+
+    Behavior:
+    - Saves files to storage
+    - Creates DB records for each file
+    - Updates project storage usage
+    - Rolls back DB and storage changes on failure
+
+    Returns:
+        List of created Document objects
+    """
 
     project = get_project_or_error(project_id, db)
-    is_owner = project.owner_id == current_user.id
-    is_participant = check_membership(project_id, current_user.id, db)
 
-    if not is_owner and not is_participant:
-        raise exceptions.ForbiddenActionError("Access denied")
+    check_project_access(project, current_user, db, allow_participant=True)
 
     uploaded_files_bytes_sum = sum([get_file_size(doc) for doc in docs])
 
@@ -42,11 +53,9 @@ def upload_project_related_docs(
 
     created_docs = []
     saved_files = []
-    storage = get_storage()
 
     with db_transaction(db, rollback_files_saving, saved_files, storage):
         for doc in docs:
-            storage = get_storage()
             file_key, size = storage.save_file(doc)
 
             db_doc = models.Document(
@@ -72,15 +81,23 @@ def get_project_related_docs(
         current_user: models.User,
         db: Session
 ) -> list[models.Document]:
+    """
+    Retrieve all documents for a project.
 
-    project, is_owner, is_participant = project_and_user_status(project_id, current_user, db)
+    Access:
+    - Allowed for project owner
+    - Allowed for project participants
 
-    if not is_owner and is_participant is None:
-        raise exceptions.ForbiddenActionError("You have no access")
+    Raises:
+        ForbiddenActionError: if user has no access
 
-    project_documents = [doc for doc in project.docs]
+    Returns:
+        List of project documents
+    """
+    project = get_project_or_error(project_id, db)
+    check_project_access(project, current_user, db, allow_participant=True)
 
-    return project_documents
+    return list(project.docs)
 
 
 def get_doc_by_id(
@@ -88,29 +105,48 @@ def get_doc_by_id(
         current_user: models.User,
         db: Session
 ) -> models.Document:
+    """
+    Retrieve a document by ID.
 
+    Access:
+    - Project owner has full access
+    - Project participants may have limited access depending on project rules
+
+    Raises:
+        ForbiddenActionError: if user has no access
+
+    Returns:
+        Document instance
+    """
     document = get_doc_or_error(doc_id, db)
-    full_access_allowed, access_as_project_participant = document_access_check(document, current_user.id, db)
-    if not full_access_allowed and not access_as_project_participant:
-        raise exceptions.ForbiddenActionError("You have no access")
+    check_project_access(document.project, current_user, db, allow_participant=True)
 
     return document
 
 
 def delete_doc_by_id(
         document_id: int,
-        background_tasks: BackgroundTasks,
         current_user: models.User,
-        db: Session
-) -> None:
+        db: Session,
+) -> str:
+    """
+    Mark a document for deletion and update project storage usage.
+
+    Access rules:
+    - Project owner: full delete access
+    - Participants: not allowed to delete
+
+    Behavior:
+    - Marks document as deleted (soft delete)
+    - Decreases project storage counter
+    - Returns file key for async storage cleanup
+
+    Returns:
+        File key that must be removed from storage
+    """
 
     document = get_doc_or_error(document_id, db)
-    full_access_allowed, access_as_project_participant = document_access_check(document, current_user.id, db)
-    if not full_access_allowed:
-        if not access_as_project_participant:
-            raise exceptions.ForbiddenActionError("You have no access")
-        else:
-            raise exceptions.ForbiddenActionError("Only project owner can delete related documents")
+    check_project_access_allow_only_for_owner(document.project, current_user, db)
 
     deleted_file_key = document.file_key
 
@@ -118,18 +154,35 @@ def delete_doc_by_id(
         document.to_delete = True
         document.project.storage_used_bytes -= document.size
 
-    background_tasks.add_task(clean_up_docs, [deleted_file_key], storage=get_storage())
-
-    return
+    return deleted_file_key
 
 
 def update_document_by_id(
         document_id: int,
         new_doc: UploadFile,
-        background_tasks: BackgroundTasks,
         current_user: models.User,
-        db: Session
-) -> models.Document:
+        db: Session,
+        storage: BaseStorage
+) -> tuple[models.Document, str]:
+    """
+    Replace an existing document with a new file version.
+
+    Checks:
+    - User must have access to the document
+    - Project storage limits must not be exceeded after update
+
+    Behavior:
+    - Uploads new file to storage
+    - Updates DB record with new metadata
+    - Adjusts project storage usage
+    - Old file is returned for async cleanup
+    - Rolls back DB/storage changes on failure
+
+    Returns:
+        Tuple of:
+        - Updated Document
+        - Old file key for deletion
+    """
     document_to_change = get_doc_by_id(document_id, current_user, db)
 
     uploaded_file_bytes_size = get_file_size(new_doc)
@@ -140,8 +193,6 @@ def update_document_by_id(
 
     previous_file_version = document_to_change.file_key
     rollback_files = []
-
-    storage = get_storage()
 
     with db_transaction(db, rollback_files_saving, rollback_files, storage):
         file_key, size = storage.save_file(new_doc)
@@ -155,7 +206,4 @@ def update_document_by_id(
         document_to_change.uploaded_by = current_user.id
         document_to_change.project.storage_used_bytes += size_diff
 
-
-    background_tasks.add_task(storage.delete_file, previous_file_version)
-
-    return document_to_change
+    return document_to_change, previous_file_version

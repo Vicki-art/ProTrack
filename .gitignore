@@ -10,3 +10,7 @@ venv/
 storage/
 *.log
 logs/
+
+dist/
+build/
+*.egg-info/
