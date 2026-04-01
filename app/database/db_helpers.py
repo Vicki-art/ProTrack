@@ -93,6 +93,24 @@ def get_user_by_username_or_error(
     return user
 
 
+def check_unique_email(email: str, db: Session) -> None:
+    """
+    Check email uniqueness
+
+    Raises:
+        DataConflictError: if email already exist
+
+    Returns:
+        None
+    """
+    exists: models.Profile | None = db.query(models.Profile).filter(
+        models.Profile.email == email
+    ).first()
+
+    if exists:
+        raise exceptions.DataConflictError("Email belongs to another user")
+
+
 def check_membership(
     project_id: int,
     user_id: int,

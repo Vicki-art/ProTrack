@@ -113,13 +113,13 @@ def update_project(
 )
 def add_project_participant(
     project_id: int,
-    username: str = Query(..., description="Login of the user to invite"),
+    user: str = Query(..., description="Login of the user to invite"),
     current_user: models.User = Depends(oauth2.get_current_user),
     db: Session = Depends(get_db)
 ) -> schemas.MessageResponse:
 
     projects_services.add_new_participant(
-        username,
+        user,
         project_id,
         current_user,
         db
@@ -138,12 +138,12 @@ def add_project_participant(
 )
 def exclude_project_participant(
         project_id: int,
-        username: str = Query(..., description="Username of the user to exclude"),
+        user: str = Query(..., description="Username of the user to exclude"),
         current_user: models.User = Depends(oauth2.get_current_user),
         db: Session = Depends(get_db)
 ) -> None:
 
-    projects_services.delete_participant(project_id, username, current_user, db)
+    projects_services.delete_participant(project_id, user, current_user, db)
 
 
 @router.get(

@@ -132,6 +132,8 @@ def add_new_participant(
         NotFoundError: If user or project does not exist.
     """
     project = get_project_or_error(project_id, db)
+    print(current_user.id)
+    print("I am checking")
     check_project_access_allow_only_for_owner(project, current_user, db)
 
     if new_participant_username == current_user.username:

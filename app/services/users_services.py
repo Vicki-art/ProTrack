@@ -4,7 +4,7 @@ from app.core import schemas
 from app.database import models
 from app.exceptions import exceptions
 from app.database.db import db_transaction
-from app.database.db_helpers import get_profile_or_error
+from app.database.db_helpers import get_profile_or_error, check_unique_email
 
 
 def update_profile(
@@ -36,6 +36,9 @@ def update_profile(
         raise exceptions.ForbiddenActionError("You cannot modify another user's profile")
 
     current_user_profile = get_profile_or_error(current_user.id, db)
+
+    if current_user.profile.email != profile_info.email:
+        check_unique_email(profile_info.email, db)
 
     with db_transaction(db):
         current_user_profile.first_name = profile_info.first_name

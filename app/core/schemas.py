@@ -58,7 +58,7 @@ class Token(py.BaseModel):
 
 
 class TokenData(py.BaseModel):
-    id: str | None = None
+    id: int | None = None
 
 
 class ProjectTokenData(py.BaseModel):
