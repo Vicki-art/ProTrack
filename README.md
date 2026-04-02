@@ -184,7 +184,7 @@ erDiagram
         string first_name
         string last_name
         string email UK
-        int user_id FK_UK
+        int user_id FK
     }
 
     projects {
@@ -197,9 +197,9 @@ erDiagram
     }
 
     users_projects {
-        int user_id PK_FK
-        int project_id PK_FK
-        projectrole role
+        int user_id PK
+        int project_id PK
+        string role
     }
 
     documents {
