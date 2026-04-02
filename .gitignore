@@ -7,7 +7,6 @@ venv/
 .env.*
 *.db
 .python-version
-storage/
 *.log
 logs/
 
